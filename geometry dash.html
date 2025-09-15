@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Simple Platformer</title>
+<title>Platformer with Enemies, Collectibles & Levels</title>
 <style>
   canvas {
     background: #87CEEB; /* sky blue */
@@ -30,16 +30,52 @@
     velocityX: 0,
     velocityY: 0,
     speed: 5,
-    jumping: false
+    jumping: false,
+    alive: true
   };
 
-  // Platforms array
-  const platforms = [
-    { x: 0, y: 360, width: 600, height: 40 },    // ground
-    { x: 150, y: 300, width: 100, height: 20 },
-    { x: 300, y: 250, width: 100, height: 20 },
-    { x: 450, y: 200, width: 100, height: 20 }
+  // Levels data (platforms, enemies, coins)
+  const levels = [
+    {
+      platforms: [
+        { x: 0, y: 360, width: 600, height: 40 },
+        { x: 150, y: 300, width: 100, height: 20 },
+        { x: 300, y: 250, width: 100, height: 20 },
+        { x: 450, y: 200, width: 100, height: 20 }
+      ],
+      enemies: [
+        { x: 160, y: 280, width: 40, height: 20, range: 80, speed: 2, direction: 1 },
+        { x: 460, y: 180, width: 40, height: 20, range: 80, speed: 3, direction: 1 }
+      ],
+      coins: [
+        { x: 180, y: 270, width: 15, height: 15, collected: false },
+        { x: 320, y: 220, width: 15, height: 15, collected: false },
+        { x: 480, y: 170, width: 15, height: 15, collected: false }
+      ]
+    },
+    {
+      platforms: [
+        { x: 0, y: 360, width: 600, height: 40 },
+        { x: 100, y: 320, width: 150, height: 20 },
+        { x: 300, y: 280, width: 150, height: 20 },
+        { x: 500, y: 240, width: 80, height: 20 }
+      ],
+      enemies: [
+        { x: 110, y: 300, width: 40, height: 20, range: 120, speed: 2, direction: 1 },
+        { x: 310, y: 260, width: 40, height: 20, range: 100, speed: 2.5, direction: 1 }
+      ],
+      coins: [
+        { x: 140, y: 310, width: 15, height: 15, collected: false },
+        { x: 350, y: 270, width: 15, height: 15, collected: false },
+        { x: 520, y: 230, width: 15, height: 15, collected: false }
+      ]
+    }
   ];
+
+  let currentLevel = 0;
+  let platforms = levels[currentLevel].platforms;
+  let enemies = levels[currentLevel].enemies;
+  let coins = levels[currentLevel].coins;
 
   // Keys state
   const keys = {};
@@ -53,7 +89,53 @@
     keys[e.code] = false;
   });
 
+  function rectCollision(rect1, rect2) {
+    return (
+      rect1.x < rect2.x + rect2.width &&
+      rect1.x + rect1.width > rect2.x &&
+      rect1.y < rect2.y + rect2.height &&
+      rect1.y + rect1.height > rect2.y
+    );
+  }
+
+  function resetPlayer() {
+    player.x = 50;
+    player.y = 0;
+    player.velocityX = 0;
+    player.velocityY = 0;
+    player.jumping = false;
+    player.alive = true;
+  }
+
+  function nextLevel() {
+    currentLevel++;
+    if (currentLevel >= levels.length) {
+      alert('Congrats! You completed all levels!');
+      currentLevel = 0;
+    }
+    platforms = levels[currentLevel].platforms;
+    enemies = levels[currentLevel].enemies;
+    coins = levels[currentLevel].coins;
+    for (let coin of coins) coin.collected = false;
+    resetPlayer();
+  }
+
   function gameLoop() {
+    if (!player.alive) {
+      // Show death message and reset player after a short delay
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'white';
+      ctx.font = '30px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('You Died! Respawning...', canvas.width / 2, canvas.height / 2);
+      setTimeout(() => {
+        resetPlayer();
+      }, 1500);
+      requestAnimationFrame(gameLoop);
+      return;
+    }
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -67,11 +149,9 @@
     }
 
     // Jumping
-    if (keys['Space'] || keys['ArrowUp']) {
-      if (!player.jumping) {
-        player.velocityY = -12;
-        player.jumping = true;
-      }
+    if ((keys['Space'] || keys['ArrowUp']) && !player.jumping) {
+      player.velocityY = -12;
+      player.jumping = true;
     }
 
     // Apply gravity
@@ -86,7 +166,7 @@
     if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
     // Platform collision detection
-    player.jumping = true; // Assume player is in air until collision is detected
+    player.jumping = true;
     for (let platform of platforms) {
       if (
         player.x < platform.x + platform.width &&
@@ -101,10 +181,58 @@
       }
     }
 
+    // Enemy movement and collision
+    for (let enemy of enemies) {
+      enemy.x += enemy.speed * enemy.direction;
+
+      // Change direction at range edges
+      if (enemy.x < enemy.range + enemy.x - enemy.range) enemy.direction = 1;
+      if (enemy.x > enemy.range + enemy.x) enemy.direction = -1;
+
+      // Enemy patrol bounds (based on initial x and range)
+      if (enemy.x < enemy.initialX - enemy.range) enemy.direction = 1;
+      if (enemy.x > enemy.initialX + enemy.range) enemy.direction = -1;
+
+      // Initialize enemy starting position if not set
+      if (enemy.initialX === undefined) {
+        enemy.initialX = enemy.x;
+      }
+
+      // Draw enemy
+      ctx.fillStyle = 'black';
+      ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+
+      // Collision with player
+      if (rectCollision(player, enemy)) {
+        player.alive = false;
+      }
+    }
+
     // Draw platforms
     ctx.fillStyle = '#654321'; // brown
     for (let platform of platforms) {
       ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+    }
+
+    // Draw coins & check collection
+    let allCollected = true;
+    for (let coin of coins) {
+      if (!coin.collected) {
+        ctx.fillStyle = 'gold';
+        ctx.beginPath();
+        ctx.arc(coin.x + coin.width / 2, coin.y + coin.height / 2, coin.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (rectCollision(player, coin)) {
+          coin.collected = true;
+        }
+        allCollected = false;
+      }
+    }
+
+    // If all coins collected, advance level
+    if (allCollected) {
+      nextLevel();
     }
 
     // Draw player
@@ -115,6 +243,7 @@
   }
 
   // Start game loop
+  resetPlayer();
   gameLoop();
 </script>
 </body>
