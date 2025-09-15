@@ -2,23 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Open World Platformer</title>
+<title>Open World Platformer with XP & Healing</title>
 <style>
-  canvas {
-    background: #87CEEB;
-    display: block;
-    margin: 20px auto;
-    border: 2px solid #000;
-  }
   body {
     text-align: center;
     font-family: Arial, sans-serif;
+    margin: 0;
+    background: linear-gradient(to top, #5b8c5a, #87CEEB);
+  }
+  canvas {
+    display: block;
+    margin: 20px auto;
+    border: 2px solid #000;
+    background: transparent;
+  }
+  h1, p {
+    margin: 5px;
+    user-select: none;
   }
 </style>
 </head>
 <body>
 <h1>Open World Platformer</h1>
-<p>Use A and D to move, W to jump, and F to attack. Explore and survive!</p>
+<p>Use A/D to move, W to jump, F to attack, H to heal (cost: 5 XP)</p>
 <canvas id="game" width="800" height="400"></canvas>
 <script>
   const canvas = document.getElementById('game');
@@ -28,19 +34,36 @@
   const friction = 0.8;
   const worldWidth = 3000;
 
+  // Background image (simple repeating pattern)
+  const bgPatternCanvas = document.createElement('canvas');
+  bgPatternCanvas.width = 100;
+  bgPatternCanvas.height = 100;
+  const bgCtx = bgPatternCanvas.getContext('2d');
+  // Draw simple green hills pattern
+  bgCtx.fillStyle = '#3a6b35';
+  bgCtx.fillRect(0, 50, 100, 50);
+  bgCtx.fillStyle = '#4fa360';
+  bgCtx.beginPath();
+  bgCtx.arc(25, 50, 40, Math.PI, 0, false);
+  bgCtx.arc(75, 50, 40, Math.PI, 0, false);
+  bgCtx.fill();
+  const bgPattern = ctx.createPattern(bgPatternCanvas, 'repeat');
+
   const player = {
     x: 100,
     y: 0,
-    width: 40,
+    width: 60,   // square player
     height: 60,
     velocityX: 0,
     velocityY: 0,
     speed: 5,
     jumping: false,
     alive: true,
-    health: 3,
+    health: 5,
+    maxHealth: 5,
     attackCooldown: 0,
-    attackRange: 50
+    attackRange: 50,
+    xp: 0
   };
 
   const platforms = [
@@ -57,11 +80,11 @@
   ];
 
   const enemies = [
-    { x: 210, y: 280, width: 40, height: 40, range: 80, speed: 2, direction: 1, health: 2, initialX: 210, alive: true },
-    { x: 670, y: 210, width: 40, height: 40, range: 100, speed: 3, direction: 1, health: 3, initialX: 670, alive: true },
-    { x: 1250, y: 160, width: 40, height: 40, range: 90, speed: 2.5, direction: 1, health: 3, initialX: 1250, alive: true },
-    { x: 1510, y: 260, width: 40, height: 40, range: 110, speed: 2, direction: 1, health: 2, initialX: 1510, alive: true },
-    { x: 2120, y: 200, width: 40, height: 40, range: 100, speed: 2.5, direction: 1, health: 3, initialX: 2120, alive: true }
+    { x: 210, y: 280, width: 40, height: 50, range: 80, speed: 2, direction: 1, health: 2, maxHealth: 2, initialX: 210, alive: true, xpValue: 2 },
+    { x: 670, y: 210, width: 40, height: 50, range: 100, speed: 3, direction: 1, health: 3, maxHealth: 3, initialX: 670, alive: true, xpValue: 3 },
+    { x: 1250, y: 160, width: 40, height: 50, range: 90, speed: 2.5, direction: 1, health: 3, maxHealth: 3, initialX: 1250, alive: true, xpValue: 3 },
+    { x: 1510, y: 260, width: 40, height: 50, range: 110, speed: 2, direction: 1, health: 2, maxHealth: 2, initialX: 1510, alive: true, xpValue: 2 },
+    { x: 2120, y: 200, width: 40, height: 50, range: 100, speed: 2.5, direction: 1, health: 3, maxHealth: 3, initialX: 2120, alive: true, xpValue: 3 }
   ];
 
   const coins = [
@@ -95,8 +118,9 @@
     player.velocityY = 0;
     player.jumping = false;
     player.alive = true;
-    player.health = 3;
+    player.health = player.maxHealth;
     player.attackCooldown = 0;
+    player.xp = 0;
   }
 
   let cameraX = 0;
@@ -114,13 +138,14 @@
       return;
     }
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Clear with background pattern
+    ctx.fillStyle = bgPattern;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Move left/right
+    // Move player
     if (keys['KeyD']) player.velocityX = player.speed;
     else if (keys['KeyA']) player.velocityX = -player.speed;
     else player.velocityX *= friction;
-
     if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
 
     // Jump
@@ -132,7 +157,6 @@
     // Gravity
     player.velocityY += gravity;
 
-    // Update player position
     player.x += player.velocityX;
     player.y += player.velocityY;
 
@@ -140,7 +164,7 @@
     if (player.x < 0) player.x = 0;
     if (player.x + player.width > worldWidth) player.x = worldWidth - player.width;
 
-    // Platform collision
+    // Platforms collision
     player.jumping = true;
     for (const platform of platforms) {
       if (
@@ -155,10 +179,9 @@
       }
     }
 
-    // Enemy movement and drawing
+    // Enemies logic
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
-
       enemy.x += enemy.speed * enemy.direction;
       if (enemy.x < enemy.initialX - enemy.range) {
         enemy.direction = 1;
@@ -168,10 +191,14 @@
         enemy.x = enemy.initialX + enemy.range;
       }
 
-      ctx.fillStyle = enemy.health === 1 ? 'darkred' : 'black';
+      // Draw enemy with health bar
+      ctx.fillStyle = 'black';
       ctx.fillRect(enemy.x - cameraX, enemy.y, enemy.width, enemy.height);
+      ctx.fillStyle = 'red';
+      const hpRatio = enemy.health / enemy.maxHealth;
+      ctx.fillRect(enemy.x - cameraX, enemy.y - 8, enemy.width * hpRatio, 5);
 
-      // Hurt player if touching
+      // Enemy hits player
       if (rectCollision(player, enemy)) {
         if (player.attackCooldown <= 0) {
           player.health--;
@@ -184,7 +211,7 @@
     // Attack cooldown
     if (player.attackCooldown > 0) player.attackCooldown--;
 
-    // Attack with F key
+    // Attack (F key)
     if (keys['KeyF'] && player.attackCooldown <= 0) {
       const facingLeft = keys['KeyA'] && !keys['KeyD'];
       const attackBox = {
@@ -200,12 +227,43 @@
       for (const enemy of enemies) {
         if (enemy.alive && rectCollision(attackBox, enemy)) {
           enemy.health--;
-          if (enemy.health <= 0) enemy.alive = false;
+          if (enemy.health <= 0) {
+            enemy.alive = false;
+            player.xp += enemy.xpValue;  // Gain XP on kill
+          }
         }
       }
 
       player.attackCooldown = 20;
     }
+
+    // Coins drawing & collection
+    for (const coin of coins) {
+      if (!coin.collected) {
+        ctx.fillStyle = 'gold';
+        ctx.beginPath();
+        ctx.arc(coin.x + coin.width / 2 - cameraX, coin.y + coin.height / 2, coin.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (rectCollision(player, coin)) coin.collected = true;
+      }
+    }
+
+    // Healing mechanic (H key)
+    // Costs 5 XP to heal 1 health point (up to maxHealth)
+    if (keys['KeyH']) {
+      if (player.xp >= 5 && player.health < player.maxHealth) {
+        player.health++;
+        player.xp -= 5;
+        // Small cooldown to prevent multiple heals per frame
+        keys['KeyH'] = false;
+      }
+    }
+
+    // Camera follows player
+    cameraX = player.x - canvas.width / 2 + player.width / 2;
+    if (cameraX < 0) cameraX = 0;
+    if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
 
     // Draw platforms
     ctx.fillStyle = '#654321';
@@ -213,28 +271,14 @@
       ctx.fillRect(platform.x - cameraX, platform.y, platform.width, platform.height);
     }
 
-    // Draw coins and collect
-    for (const coin of coins) {
-      if (!coin.collected) {
-        ctx.fillStyle = 'gold';
-        ctx.beginPath();
-        ctx.arc(coin.x + coin.width/2 - cameraX, coin.y + coin.height/2, coin.width/2, 0, Math.PI*2);
-        ctx.fill();
-
-        if (rectCollision(player, coin)) coin.collected = true;
-      }
-    }
-
-    // Camera follow
-    cameraX = player.x - canvas.width/2 + player.width/2;
-    if (cameraX < 0) cameraX = 0;
-    if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
-
-    // Draw player health
+    // Draw player health bar and XP
     ctx.fillStyle = 'red';
     ctx.font = '20px Arial';
     ctx.textAlign = 'left';
-    ctx.fillText('Health: ' + player.health, 10, 30);
+    ctx.fillText(`Health: ${player.health} / ${player.maxHealth}`, 10, 30);
+
+    ctx.fillStyle = 'yellow';
+    ctx.fillText(`XP: ${player.xp}`, 10, 60);
 
     // Draw player
     ctx.fillStyle = 'red';
