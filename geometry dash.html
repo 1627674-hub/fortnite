@@ -7,12 +7,18 @@
   canvas {
     background: #87CEEB; /* sky blue */
     display: block;
-    margin: 0 auto;
+    margin: 20px auto;
     border: 2px solid #000;
+  }
+  body {
+    text-align: center;
+    font-family: Arial, sans-serif;
   }
 </style>
 </head>
 <body>
+<h1>Simple Platformer</h1>
+<p>Use ← → to move, ↑ or Space to jump. Avoid black enemies and collect all coins!</p>
 <canvas id="game" width="600" height="400"></canvas>
 <script>
   const canvas = document.getElementById('game');
@@ -80,7 +86,6 @@
   // Keys state
   const keys = {};
 
-  // Key listeners
   window.addEventListener('keydown', (e) => {
     keys[e.code] = true;
   });
@@ -109,8 +114,8 @@
 
   function loadLevel(levelIndex) {
     const level = levels[levelIndex];
-    // Deep copy platforms/enemies/coins so we can modify them without messing original data
-    platforms = level.platforms.map(p => ({...p}));
+    // Deep copy platforms, enemies, coins so we can modify safely
+    platforms = level.platforms.map(p => ({ ...p }));
     enemies = level.enemies.map(e => ({ ...e, initialX: e.x }));
     coins = level.coins.map(c => ({ ...c, collected: false }));
     resetPlayer();
@@ -119,7 +124,7 @@
   function nextLevel() {
     currentLevel++;
     if (currentLevel >= levels.length) {
-      alert('Congrats! You completed all levels!');
+      alert('🎉 Congrats! You finished all levels!');
       currentLevel = 0;
     }
     loadLevel(currentLevel);
@@ -127,8 +132,8 @@
 
   function gameLoop() {
     if (!player.alive) {
-      // Show death message and reset player after a short delay
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      // Show death message and respawn after delay
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = 'white';
       ctx.font = '30px Arial';
@@ -141,17 +146,17 @@
       return;
     }
 
-    // Clear canvas
+    // Clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Move left/right
+    // Handle horizontal movement
     if (keys['ArrowRight']) {
       player.velocityX = player.speed;
     } else if (keys['ArrowLeft']) {
       player.velocityX = -player.speed;
     } else {
       player.velocityX *= friction;
-      if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0; // stop very small sliding
+      if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
     }
 
     // Jumping
@@ -167,18 +172,18 @@
     player.x += player.velocityX;
     player.y += player.velocityY;
 
-    // Prevent going off screen horizontally
+    // Prevent going off canvas horizontally
     if (player.x < 0) player.x = 0;
     if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
     // Platform collision detection
-    player.jumping = true;
-    for (let platform of platforms) {
+    player.jumping = true; // assume in air
+    for (const platform of platforms) {
       if (
         player.x < platform.x + platform.width &&
         player.x + player.width > platform.x &&
         player.y + player.height > platform.y &&
-        player.y + player.height < platform.y + platform.height
+        player.y + player.height < platform.y + platform.height + player.velocityY
       ) {
         // Land on platform
         player.y = platform.y - player.height;
@@ -187,11 +192,11 @@
       }
     }
 
-    // Enemy movement and collision
-    for (let enemy of enemies) {
+    // Enemy movement & collision
+    for (const enemy of enemies) {
       enemy.x += enemy.speed * enemy.direction;
 
-      // Reverse direction if enemy moves out of patrol range
+      // Patrol bounds
       if (enemy.x < enemy.initialX - enemy.range) {
         enemy.direction = 1;
         enemy.x = enemy.initialX - enemy.range;
@@ -204,21 +209,21 @@
       ctx.fillStyle = 'black';
       ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
 
-      // Collision with player
+      // Collision with player = death
       if (rectCollision(player, enemy)) {
         player.alive = false;
       }
     }
 
     // Draw platforms
-    ctx.fillStyle = '#654321'; // brown
-    for (let platform of platforms) {
+    ctx.fillStyle = '#654321';
+    for (const platform of platforms) {
       ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
     }
 
-    // Draw coins & check collection
+    // Draw and collect coins
     let allCollected = true;
-    for (let coin of coins) {
+    for (const coin of coins) {
       if (!coin.collected) {
         ctx.fillStyle = 'gold';
         ctx.beginPath();
@@ -232,19 +237,19 @@
       }
     }
 
-    // If all coins collected, advance level
+    // If all coins collected, next level
     if (allCollected) {
       nextLevel();
     }
 
     // Draw player
-    ctx.fillStyle = '#FF0000'; // red
+    ctx.fillStyle = 'red';
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
     requestAnimationFrame(gameLoop);
   }
 
-  // Initialize and start game
+  // Initialize game
   loadLevel(currentLevel);
   gameLoop();
 </script>
