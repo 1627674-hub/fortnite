@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Open World Platformer with Fight System</title>
+<title>Open World Platformer</title>
 <style>
   canvas {
     background: #87CEEB;
@@ -26,8 +26,7 @@
 
   const gravity = 0.5;
   const friction = 0.8;
-
-  const worldWidth = 3000; // Wide open world
+  const worldWidth = 3000;
 
   const player = {
     x: 100,
@@ -44,10 +43,8 @@
     attackRange: 50
   };
 
-  // Platforms array - ground + floating platforms
   const platforms = [
-    { x: 0, y: 360, width: 3000, height: 40 }, // ground
-
+    { x: 0, y: 360, width: 3000, height: 40 },
     { x: 200, y: 320, width: 120, height: 20 },
     { x: 400, y: 280, width: 120, height: 20 },
     { x: 650, y: 250, width: 150, height: 20 },
@@ -59,16 +56,14 @@
     { x: 2450, y: 210, width: 180, height: 20 }
   ];
 
-  // Enemies patrol on platforms with ranges and health
   const enemies = [
     { x: 210, y: 280, width: 40, height: 40, range: 80, speed: 2, direction: 1, health: 2, initialX: 210, alive: true },
     { x: 670, y: 210, width: 40, height: 40, range: 100, speed: 3, direction: 1, health: 3, initialX: 670, alive: true },
     { x: 1250, y: 160, width: 40, height: 40, range: 90, speed: 2.5, direction: 1, health: 3, initialX: 1250, alive: true },
     { x: 1510, y: 260, width: 40, height: 40, range: 110, speed: 2, direction: 1, health: 2, initialX: 1510, alive: true },
-    { x: 2120, y: 200, width: 40, height: 40, range: 100, speed: 2.5, direction: 1, health: 3, initialX: 2120, alive: true },
+    { x: 2120, y: 200, width: 40, height: 40, range: 100, speed: 2.5, direction: 1, health: 3, initialX: 2120, alive: true }
   ];
 
-  // Coins scattered around for collection
   const coins = [
     { x: 220, y: 310, width: 15, height: 15, collected: false },
     { x: 420, y: 270, width: 15, height: 15, collected: false },
@@ -83,21 +78,14 @@
 
   const keys = {};
 
-  window.addEventListener('keydown', (e) => {
-    keys[e.code] = true;
-  });
+  window.addEventListener('keydown', e => keys[e.code] = true);
+  window.addEventListener('keyup', e => keys[e.code] = false);
 
-  window.addEventListener('keyup', (e) => {
-    keys[e.code] = false;
-  });
-
-  function rectCollision(rect1, rect2) {
-    return (
-      rect1.x < rect2.x + rect2.width &&
-      rect1.x + rect1.width > rect2.x &&
-      rect1.y < rect2.y + rect2.height &&
-      rect1.y + rect1.height > rect2.y
-    );
+  function rectCollision(r1, r2) {
+    return r1.x < r2.x + r2.width &&
+           r1.x + r1.width > r2.x &&
+           r1.y < r2.y + r2.height &&
+           r1.y + r1.height > r2.y;
   }
 
   function resetPlayer() {
@@ -121,26 +109,21 @@
       ctx.font = '30px Arial';
       ctx.textAlign = 'center';
       ctx.fillText('You Died! Respawning...', canvas.width / 2, canvas.height / 2);
-      setTimeout(() => {
-        resetPlayer();
-      }, 1500);
+      setTimeout(resetPlayer, 1500);
       requestAnimationFrame(gameLoop);
       return;
     }
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Movement controls (A/D)
-    if (keys['KeyD']) {
-      player.velocityX = player.speed;
-    } else if (keys['KeyA']) {
-      player.velocityX = -player.speed;
-    } else {
-      player.velocityX *= friction;
-      if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
-    }
+    // Move left/right
+    if (keys['KeyD']) player.velocityX = player.speed;
+    else if (keys['KeyA']) player.velocityX = -player.speed;
+    else player.velocityX *= friction;
 
-    // Jump (W)
+    if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
+
+    // Jump
     if (keys['KeyW'] && !player.jumping) {
       player.velocityY = -12;
       player.jumping = true;
@@ -172,12 +155,11 @@
       }
     }
 
-    // Enemy logic and drawing
+    // Enemy movement and drawing
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
 
       enemy.x += enemy.speed * enemy.direction;
-
       if (enemy.x < enemy.initialX - enemy.range) {
         enemy.direction = 1;
         enemy.x = enemy.initialX - enemy.range;
@@ -189,27 +171,23 @@
       ctx.fillStyle = enemy.health === 1 ? 'darkred' : 'black';
       ctx.fillRect(enemy.x - cameraX, enemy.y, enemy.width, enemy.height);
 
-      // Collision hurts player if not attacking
+      // Hurt player if touching
       if (rectCollision(player, enemy)) {
         if (player.attackCooldown <= 0) {
           player.health--;
           player.attackCooldown = 60;
-          if (player.health <= 0) {
-            player.alive = false;
-          }
+          if (player.health <= 0) player.alive = false;
         }
       }
     }
 
-    // Attack cooldown countdown
-    if (player.attackCooldown > 0) {
-      player.attackCooldown--;
-    }
+    // Attack cooldown
+    if (player.attackCooldown > 0) player.attackCooldown--;
 
-    // Attack (F)
+    // Attack with F key
     if (keys['KeyF'] && player.attackCooldown <= 0) {
-      let facingLeft = keys['KeyA'] && !keys['KeyD'];
-      let attackBox = {
+      const facingLeft = keys['KeyA'] && !keys['KeyD'];
+      const attackBox = {
         x: facingLeft ? player.x - player.attackRange : player.x + player.width,
         y: player.y + 10,
         width: player.attackRange,
@@ -222,9 +200,7 @@
       for (const enemy of enemies) {
         if (enemy.alive && rectCollision(attackBox, enemy)) {
           enemy.health--;
-          if (enemy.health <= 0) {
-            enemy.alive = false;
-          }
+          if (enemy.health <= 0) enemy.alive = false;
         }
       }
 
@@ -237,26 +213,24 @@
       ctx.fillRect(platform.x - cameraX, platform.y, platform.width, platform.height);
     }
 
-    // Draw and collect coins
+    // Draw coins and collect
     for (const coin of coins) {
       if (!coin.collected) {
         ctx.fillStyle = 'gold';
         ctx.beginPath();
-        ctx.arc(coin.x + coin.width / 2 - cameraX, coin.y + coin.height / 2, coin.width / 2, 0, Math.PI * 2);
+        ctx.arc(coin.x + coin.width/2 - cameraX, coin.y + coin.height/2, coin.width/2, 0, Math.PI*2);
         ctx.fill();
 
-        if (rectCollision(player, coin)) {
-          coin.collected = true;
-        }
+        if (rectCollision(player, coin)) coin.collected = true;
       }
     }
 
-    // Update camera smoothly to follow player
-    cameraX = player.x - canvas.width / 2 + player.width / 2;
+    // Camera follow
+    cameraX = player.x - canvas.width/2 + player.width/2;
     if (cameraX < 0) cameraX = 0;
     if (cameraX > worldWidth - canvas.width) cameraX = worldWidth - canvas.width;
 
-    // Draw player health UI
+    // Draw player health
     ctx.fillStyle = 'red';
     ctx.font = '20px Arial';
     ctx.textAlign = 'left';
