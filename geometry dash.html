@@ -73,9 +73,9 @@
   ];
 
   let currentLevel = 0;
-  let platforms = levels[currentLevel].platforms;
-  let enemies = levels[currentLevel].enemies;
-  let coins = levels[currentLevel].coins;
+  let platforms = [];
+  let enemies = [];
+  let coins = [];
 
   // Keys state
   const keys = {};
@@ -107,17 +107,22 @@
     player.alive = true;
   }
 
+  function loadLevel(levelIndex) {
+    const level = levels[levelIndex];
+    // Deep copy platforms/enemies/coins so we can modify them without messing original data
+    platforms = level.platforms.map(p => ({...p}));
+    enemies = level.enemies.map(e => ({ ...e, initialX: e.x }));
+    coins = level.coins.map(c => ({ ...c, collected: false }));
+    resetPlayer();
+  }
+
   function nextLevel() {
     currentLevel++;
     if (currentLevel >= levels.length) {
       alert('Congrats! You completed all levels!');
       currentLevel = 0;
     }
-    platforms = levels[currentLevel].platforms;
-    enemies = levels[currentLevel].enemies;
-    coins = levels[currentLevel].coins;
-    for (let coin of coins) coin.collected = false;
-    resetPlayer();
+    loadLevel(currentLevel);
   }
 
   function gameLoop() {
@@ -146,6 +151,7 @@
       player.velocityX = -player.speed;
     } else {
       player.velocityX *= friction;
+      if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0; // stop very small sliding
     }
 
     // Jumping
@@ -185,17 +191,13 @@
     for (let enemy of enemies) {
       enemy.x += enemy.speed * enemy.direction;
 
-      // Change direction at range edges
-      if (enemy.x < enemy.range + enemy.x - enemy.range) enemy.direction = 1;
-      if (enemy.x > enemy.range + enemy.x) enemy.direction = -1;
-
-      // Enemy patrol bounds (based on initial x and range)
-      if (enemy.x < enemy.initialX - enemy.range) enemy.direction = 1;
-      if (enemy.x > enemy.initialX + enemy.range) enemy.direction = -1;
-
-      // Initialize enemy starting position if not set
-      if (enemy.initialX === undefined) {
-        enemy.initialX = enemy.x;
+      // Reverse direction if enemy moves out of patrol range
+      if (enemy.x < enemy.initialX - enemy.range) {
+        enemy.direction = 1;
+        enemy.x = enemy.initialX - enemy.range;
+      } else if (enemy.x > enemy.initialX + enemy.range) {
+        enemy.direction = -1;
+        enemy.x = enemy.initialX + enemy.range;
       }
 
       // Draw enemy
@@ -242,8 +244,8 @@
     requestAnimationFrame(gameLoop);
   }
 
-  // Start game loop
-  resetPlayer();
+  // Initialize and start game
+  loadLevel(currentLevel);
   gameLoop();
 </script>
 </body>
