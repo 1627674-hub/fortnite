@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<title>Platformer with Enemies, Collectibles & Levels</title>
+<title>Platformer with Enemies & Fight System</title>
 <style>
   canvas {
-    background: #87CEEB; /* sky blue */
+    background: #87CEEB;
     display: block;
     margin: 20px auto;
     border: 2px solid #000;
@@ -17,8 +17,8 @@
 </style>
 </head>
 <body>
-<h1>Simple Platformer</h1>
-<p>Use ← → to move, ↑ or Space to jump. Avoid black enemies and collect all coins!</p>
+<h1>Platformer with Fight System</h1>
+<p>Use ← → to move, ↑ or Space to jump, and F to attack. Avoid enemies or defeat them!</p>
 <canvas id="game" width="600" height="400"></canvas>
 <script>
   const canvas = document.getElementById('game');
@@ -27,7 +27,6 @@
   const gravity = 0.5;
   const friction = 0.8;
 
-  // Player object
   const player = {
     x: 50,
     y: 0,
@@ -37,10 +36,12 @@
     velocityY: 0,
     speed: 5,
     jumping: false,
-    alive: true
+    alive: true,
+    health: 3,
+    attackCooldown: 0,
+    attackRange: 50
   };
 
-  // Levels data (platforms, enemies, coins)
   const levels = [
     {
       platforms: [
@@ -50,8 +51,8 @@
         { x: 450, y: 200, width: 100, height: 20 }
       ],
       enemies: [
-        { x: 160, y: 280, width: 40, height: 20, range: 80, speed: 2, direction: 1 },
-        { x: 460, y: 180, width: 40, height: 20, range: 80, speed: 3, direction: 1 }
+        { x: 160, y: 280, width: 40, height: 40, range: 80, speed: 2, direction: 1, health: 2 },
+        { x: 460, y: 160, width: 40, height: 40, range: 80, speed: 3, direction: 1, health: 3 }
       ],
       coins: [
         { x: 180, y: 270, width: 15, height: 15, collected: false },
@@ -67,8 +68,8 @@
         { x: 500, y: 240, width: 80, height: 20 }
       ],
       enemies: [
-        { x: 110, y: 300, width: 40, height: 20, range: 120, speed: 2, direction: 1 },
-        { x: 310, y: 260, width: 40, height: 20, range: 100, speed: 2.5, direction: 1 }
+        { x: 110, y: 280, width: 40, height: 40, range: 120, speed: 2, direction: 1, health: 3 },
+        { x: 310, y: 240, width: 40, height: 40, range: 100, speed: 2.5, direction: 1, health: 2 }
       ],
       coins: [
         { x: 140, y: 310, width: 15, height: 15, collected: false },
@@ -83,7 +84,6 @@
   let enemies = [];
   let coins = [];
 
-  // Keys state
   const keys = {};
 
   window.addEventListener('keydown', (e) => {
@@ -110,13 +110,14 @@
     player.velocityY = 0;
     player.jumping = false;
     player.alive = true;
+    player.health = 3;
+    player.attackCooldown = 0;
   }
 
   function loadLevel(levelIndex) {
     const level = levels[levelIndex];
-    // Deep copy platforms, enemies, coins so we can modify safely
     platforms = level.platforms.map(p => ({ ...p }));
-    enemies = level.enemies.map(e => ({ ...e, initialX: e.x }));
+    enemies = level.enemies.map(e => ({ ...e, initialX: e.x, alive: true }));
     coins = level.coins.map(c => ({ ...c, collected: false }));
     resetPlayer();
   }
@@ -132,8 +133,7 @@
 
   function gameLoop() {
     if (!player.alive) {
-      // Show death message and respawn after delay
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = 'white';
       ctx.font = '30px Arial';
@@ -146,10 +146,8 @@
       return;
     }
 
-    // Clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Handle horizontal movement
     if (keys['ArrowRight']) {
       player.velocityX = player.speed;
     } else if (keys['ArrowLeft']) {
@@ -159,25 +157,20 @@
       if (Math.abs(player.velocityX) < 0.1) player.velocityX = 0;
     }
 
-    // Jumping
     if ((keys['Space'] || keys['ArrowUp']) && !player.jumping) {
       player.velocityY = -12;
       player.jumping = true;
     }
 
-    // Apply gravity
     player.velocityY += gravity;
 
-    // Update player position
     player.x += player.velocityX;
     player.y += player.velocityY;
 
-    // Prevent going off canvas horizontally
     if (player.x < 0) player.x = 0;
     if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-    // Platform collision detection
-    player.jumping = true; // assume in air
+    player.jumping = true;
     for (const platform of platforms) {
       if (
         player.x < platform.x + platform.width &&
@@ -185,18 +178,17 @@
         player.y + player.height > platform.y &&
         player.y + player.height < platform.y + platform.height + player.velocityY
       ) {
-        // Land on platform
         player.y = platform.y - player.height;
         player.velocityY = 0;
         player.jumping = false;
       }
     }
 
-    // Enemy movement & collision
     for (const enemy of enemies) {
+      if (!enemy.alive) continue;
+
       enemy.x += enemy.speed * enemy.direction;
 
-      // Patrol bounds
       if (enemy.x < enemy.initialX - enemy.range) {
         enemy.direction = 1;
         enemy.x = enemy.initialX - enemy.range;
@@ -205,23 +197,56 @@
         enemy.x = enemy.initialX + enemy.range;
       }
 
-      // Draw enemy
-      ctx.fillStyle = 'black';
+      ctx.fillStyle = enemy.health === 1 ? 'darkred' : 'black';
       ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
 
-      // Collision with player = death
       if (rectCollision(player, enemy)) {
-        player.alive = false;
+        if (player.attackCooldown <= 0) {
+          player.health--;
+          player.attackCooldown = 60;
+          if (player.health <= 0) {
+            player.alive = false;
+          }
+        }
       }
     }
 
-    // Draw platforms
+    if (player.attackCooldown > 0) {
+      player.attackCooldown--;
+    }
+
+    if (keys['KeyF'] && player.attackCooldown <= 0) {
+      let attackBox = {
+        x: player.x + player.width,
+        y: player.y + 10,
+        width: player.attackRange,
+        height: player.height - 20
+      };
+
+      if (keys['ArrowLeft'] && !keys['ArrowRight']) {
+        attackBox.x = player.x - player.attackRange;
+      }
+
+      ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+      ctx.fillRect(attackBox.x, attackBox.y, attackBox.width, attackBox.height);
+
+      for (const enemy of enemies) {
+        if (enemy.alive && rectCollision(attackBox, enemy)) {
+          enemy.health--;
+          if (enemy.health <= 0) {
+            enemy.alive = false;
+          }
+        }
+      }
+
+      player.attackCooldown = 20;
+    }
+
     ctx.fillStyle = '#654321';
     for (const platform of platforms) {
       ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
     }
 
-    // Draw and collect coins
     let allCollected = true;
     for (const coin of coins) {
       if (!coin.collected) {
@@ -237,19 +262,20 @@
       }
     }
 
-    // If all coins collected, next level
     if (allCollected) {
       nextLevel();
     }
 
-    // Draw player
+    ctx.fillStyle = 'red';
+    ctx.font = '20px Arial';
+    ctx.fillText('Health: ' + player.health, 10, 30);
+
     ctx.fillStyle = 'red';
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
     requestAnimationFrame(gameLoop);
   }
 
-  // Initialize game
   loadLevel(currentLevel);
   gameLoop();
 </script>
